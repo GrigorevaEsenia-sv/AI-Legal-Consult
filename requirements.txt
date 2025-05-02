@@ -1,0 +1,16 @@
+python-dotenv==0.19.2
+numpy
+torch
+scipy
+transformers
+sentencepiece
+langchain
+langchain_community
+langchain_compressa
+langchain-huggingface
+sentence-transformers
+faiss-cpu
+pandas
+bs4
+python-docx
+requests
