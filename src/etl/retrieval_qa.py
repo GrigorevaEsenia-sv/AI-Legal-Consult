@@ -1,6 +1,6 @@
 from langchain.document_loaders import TextLoader, CSVLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.embeddings import HuggingFaceEmbeddings
+from langchain_huggingface import HuggingFaceEmbeddings
 from langchain.vectorstores import FAISS
 from langchain.chains import RetrievalQA
 # from data_loader import load_data
@@ -56,7 +56,8 @@ def dialog(api_key, file, role):
 
 if __name__ == '__main__':
     load_dotenv()
-    api_key = os.getenv('API_COMPRESSA_KEY')
+    # api_key = os.getenv('API_COMPRESSA_KEY')
+    api_key = 'FFF'
 
     with open(f'data/processed/role.txt', 'w') as fl:
         print(role, file=fl)

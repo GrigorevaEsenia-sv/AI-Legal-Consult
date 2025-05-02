@@ -1,13 +1,12 @@
 from langchain.document_loaders import TextLoader, CSVLoader
 from langchain.text_splitter import CharacterTextSplitter
-from langchain.embeddings import HuggingFaceEmbeddings
+from langchain_huggingface import HuggingFaceEmbeddings
 from langchain.vectorstores import FAISS
 from langchain.chains import RetrievalQA
 from langchain_compressa import ChatCompressa
 # from data_loader import load_data
 from docx import Document
 import re
-
 
 from docx import Document
 from typing import List, Tuple
