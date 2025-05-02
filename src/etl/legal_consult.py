@@ -5,12 +5,34 @@ from langchain.vectorstores import FAISS
 from langchain.chains import RetrievalQA
 from langchain_compressa import ChatCompressa
 # from data_loader import load_data
+from chunk_doc import chunk_legal_document
 from docx import Document
 import re
 
 from docx import Document
 from typing import List, Tuple
 import re
+
+def clean_text(text: str) -> str:
+    """Очистка текста от артефактов, HTML-тегов и лишних символов"""
+    # Удаление HTML-тегов
+    text = re.sub(r'<[^>]+>', '', text)
+    
+    # Удаление специальных символов, кроме тех, что могут быть в тексте законов (§, № и т.д.)
+    text = re.sub(r'[^\w\s§№\-\–\—\.,;:!?()«»"\']', ' ', text)
+    
+    # Удаление номеров страниц и колонтитулов (типичные паттерны)
+    text = re.sub(r'^\s*[–\-\d]+\s*$', '', text, flags=re.MULTILINE)
+    text = re.sub(r'\b(страница|стр|page|p\.)\s*\d+\b', '', text, flags=re.IGNORECASE)
+    
+    # Удаление сканов печатей и служебных отметок
+    text = re.sub(r'\[.*?печать.*?\]', '', text, flags=re.IGNORECASE)
+    text = re.sub(r'\[.*?штамп.*?\]', '', text, flags=re.IGNORECASE)
+    
+    # Нормализация пробелов и переносов строк
+    text = re.sub(r'\s+', ' ', text).strip()
+    
+    return text
 
 # Helper function to extract the last heading from existing chunks
 def get_last_heading(chunks: List[str]) -> str:
@@ -22,22 +44,26 @@ def get_last_heading(chunks: List[str]) -> str:
     for chunk in reversed(chunks):
         heading_match = re.search(r'### (.+)', chunk)
         if heading_match:
-            return heading_match.group(1)
+            return clean_text(heading_match.group(1))
     return ""
 
 def extract_structural_elements(doc_path: str) -> List[Tuple[str, str]]:
-    """Extracts headings and text paragraphs from Word document"""
+    """Extracts headings and text paragraphs from Word document with text cleaning"""
     doc = Document(doc_path)
     elements = []
     for para in doc.paragraphs:
+        cleaned_text = clean_text(para.text)
+        if not cleaned_text:
+            continue
+            
         if para.style.name.startswith('Heading'):
-            elements.append(("heading", para.text))
-        elif para.text.strip():
-            elements.append(("text", para.text))
+            elements.append(("heading", cleaned_text))
+        else:
+            elements.append(("text", cleaned_text))
     return elements
 
 def hierarchical_chunking(elements: List[Tuple[str, str]], max_chunk: int = 500) -> List[str]:
-    """Chunks document while preserving legal article structure"""
+    """Chunks document while preserving legal article structure with clean text"""
     chunks = []
     current_chunk = []
     current_size = 0
@@ -61,21 +87,24 @@ def hierarchical_chunking(elements: List[Tuple[str, str]], max_chunk: int = 500)
 
     if current_chunk:
         chunks.append(" ".join(current_chunk))
+    
+    # Постобработка: удаление возможных дубликатов и пустых чанков
+    chunks = [chunk for chunk in chunks if chunk.strip() and len(chunk.split()) > 5]  # Отбрасываем слишком короткие чанки
     return chunks
-
 
 class LegalConsult:
     doc_path = 'data/raw/housing_code/JKRF.docx'
 
-    # Создание embeddings и хранение в Compressa Vector DB
     def __init__(self, api_key, role):
         self.api_key = api_key
         elements = extract_structural_elements(self.doc_path)
         chunks = hierarchical_chunking(elements)
+        # Здесь можно добавить дополнительную обработку чанков перед созданием эмбеддингов
+        self.clean_chunks = [clean_text(chunk) for chunk in chunks]
 
         #Проверка
         print('??????????????????????????????????????????????')
-        print(chunks[0])
+        print(chunks[50])
 
         embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
         self.vectorstore = FAISS.from_texts(chunks, embeddings)
