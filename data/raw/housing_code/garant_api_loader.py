@@ -58,21 +58,21 @@ class GarantAPILoader:
             print(f"Ошибка экспорта документа {topic_id}: {str(e)}")
             return None
 
-    def process_search_results(self, text: str) -> List[Dict]:
+    def process_search_results(self, query) -> List[Dict]:
         """Полный процесс: поиск + экспорт"""
-        documents = self.search_documents(query)
+        documents = self.search_documents(**query)
         if not documents:
             return []
 
         results = []
-        for doc in documents[:2]:  # Берем первые 2 документа
+        for doc in documents:  # Берем первые 2 документа
             html_content = self.export_html(doc["topic"])
             if html_content:
                 results.append({
                     "title": doc["name"],
-                    "url": f"https://internet.garant.ru{doc['url']}",
+                    "url": f"https://api.garant.ru/v1/topic/{doc['topic']}/html",
                     "topic_id": doc["topic"],
-                    "html": html_content[:500] + "..."  # Для примера показываем часть контента
+                    "html": html_content  # Для примера показываем часть контента
                 })
         
         return results
@@ -92,13 +92,12 @@ if __name__ == "__main__":
         "sortOrder": 0  # По убыванию
     }
     
-    # Выполняем поиск
-    results = loader.search_documents(**search_params)
-    
-    # Выводим результаты
+    results = loader.process_search_results(search_params)
+
     print(f"Найдено документов: {len(results)}")
     for idx, doc in enumerate(results, 1):
-        print(f"\nДокумент #{idx}:")
-        print(f"Заголовок: {doc['name']}")
+        with open(f'data/raw/housing_code/garant/{idx}.html', 'w') as f:
+            f.write(doc['html'])
         print(f"Ссылка: {doc['url']}")
-        print(f"ID документа: {doc['topic']}")
+        print(f"\nДокумент #{idx}:")
+        print(f"HTML: {doc['html'][:200]}...")
