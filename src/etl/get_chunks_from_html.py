@@ -85,13 +85,27 @@ def load_and_chunk_html_documents(file_path, chunk_overlap=50):
             
             chunks.append(chunk)
             metadatas.append(metadata)
-            print('='*50)
-            print(metadata)
-            print(chunk)
-            print('='*50)
-    
+
+    return chunks, metadatas
+
+if __name__ == "__main__":
+    doc_path = 'data/raw/housing_code/garant/1.html'
+    print('h'*50)
+    # Загрузка документа и создание векторного хранилища
+    chunks, metadatas = tqdm(load_and_chunk_html_documents(doc_path))
+
+    for i in range(4):
+        print(metadatas[i])
+        print(chunks[i])
+        print('='*50)
+
+
     # Инициализация эмбеддингов
-    embeddings = HuggingFaceEmbeddings(model_name="cointegrated/rubert-tiny2")
+    embeddings = HuggingFaceEmbeddings(
+        model_name="sentence-transformers/all-MiniLM-L6-v2",
+        encode_kwargs={'normalize_embeddings': True}
+    )
+    
     
     # Создание векторного хранилища
     vectorstore = FAISS.from_texts(
@@ -99,27 +113,12 @@ def load_and_chunk_html_documents(file_path, chunk_overlap=50):
         embedding=embeddings,
         metadatas=metadatas
     )
+
+    # Пример поиска
+    query = "Перепланировка квартиры. Я хочу установить душевую кабинку вместо ванной, являюсь собственником квартиры. Могу ли я это сделать без каких-либо разрешений?"
+    docs = tqdm(vectorstore.similarity_search(query, k=2), desc='similarity_search in vectorestore')
     
-    return vectorstore
-if __name__ == "__main__":
-    doc_path = 'data/raw/housing_code/garant/1.html'
-    print('h'*50)
-    # Загрузка документа и создание векторного хранилища
-    texts, metadatas = load_and_chunk_html_documents(doc_path)
-    # print(texts)
-    # for text in texts[:20]:
-    #     print(text)
-    #     print('='*50)
-    # embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
-    # vectorstore = FAISS.from_texts(
-    #     texts=texts, 
-    #     embedding=embeddings, 
-    #     metadatas=metadatas
-    # )
+    print(f"query: {query}")
+    for doc in docs:
+        print("Текст:", doc.page_content)
     
-    # # Пример поиска
-    # query = "условия осуществления права на жилище"
-    # docs = tqdm(vectorstore.similarity_search(query, k=2), desc='similarity_search in vectorestore')
-    
-    # for doc in docs:
-    #     print("Текст:", doc.page_content[:200] + "...")

@@ -1,116 +1,42 @@
-from langchain.document_loaders import TextLoader, CSVLoader
+from langchain_community.document_loaders import TextLoader, CSVLoader
 from langchain.text_splitter import CharacterTextSplitter
 from langchain_huggingface import HuggingFaceEmbeddings
-from langchain.vectorstores import FAISS
+from langchain_community.vectorstores import FAISS
 from langchain.chains import RetrievalQA
 from langchain_compressa import ChatCompressa
 # from data_loader import load_data
-from docx import Document
+from tqdm import tqdm
+from get_chunks_from_html import load_and_chunk_html_documents
+from typing import List
 import re
 
-from docx import Document
-from typing import List, Tuple
-import re
-
-def clean_text(text: str) -> str:
-    """Очистка текста от артефактов, HTML-тегов и лишних символов"""
-    # Удаление HTML-тегов
-    text = re.sub(r'<[^>]+>', '', text)
-    
-    # Удаление специальных символов, кроме тех, что могут быть в тексте законов (§, № и т.д.)
-    text = re.sub(r'[^\w\s§№\-\–\—\.,;:!?()«»"\']', ' ', text)
-    
-    # Удаление номеров страниц и колонтитулов (типичные паттерны)
-    text = re.sub(r'^\s*[–\-\d]+\s*$', '', text, flags=re.MULTILINE)
-    text = re.sub(r'\b(страница|стр|page|p\.)\s*\d+\b', '', text, flags=re.IGNORECASE)
-    
-    # Удаление сканов печатей и служебных отметок
-    text = re.sub(r'\[.*?печать.*?\]', '', text, flags=re.IGNORECASE)
-    text = re.sub(r'\[.*?штамп.*?\]', '', text, flags=re.IGNORECASE)
-    
-    # Нормализация пробелов и переносов строк
-    text = re.sub(r'\s+', ' ', text).strip()
-    
-    return text
-
-# Helper function to extract the last heading from existing chunks
-def get_last_heading(chunks: List[str]) -> str:
-    """Extracts the most recent heading from generated chunks"""
-    if not chunks:
-        return ""
-    
-    # Search backwards through chunks to find last heading
-    for chunk in reversed(chunks):
-        heading_match = re.search(r'### (.+)', chunk)
-        if heading_match:
-            return clean_text(heading_match.group(1))
-    return ""
-
-def extract_structural_elements(doc_path: str) -> List[Tuple[str, str]]:
-    """Extracts headings and text paragraphs from Word document with text cleaning"""
-    doc = Document(doc_path)
-    elements = []
-    for para in doc.paragraphs:
-        cleaned_text = clean_text(para.text)
-        if not cleaned_text:
-            continue
-            
-        if para.style.name.startswith('Heading'):
-            elements.append(("heading", cleaned_text))
-        else:
-            elements.append(("text", cleaned_text))
-    return elements
-
-def hierarchical_chunking(elements: List[Tuple[str, str]], max_chunk: int = 500) -> List[str]:
-    """Chunks document while preserving legal article structure with clean text"""
-    chunks = []
-    current_chunk = []
-    current_size = 0
-
-    for elem_type, text in elements:
-        elem_size = len(text.split())
-        
-        if elem_type == "heading":
-            if current_chunk:
-                chunks.append(" ".join(current_chunk))
-                current_chunk = []
-            current_chunk.append(f"### {text}")
-            current_size = elem_size
-        else:
-            if current_size + elem_size > max_chunk and current_chunk:
-                chunks.append(" ".join(current_chunk))
-                current_chunk = [f"### {get_last_heading(chunks)}"] if get_last_heading(chunks) else []
-                current_size = len(" ".join(current_chunk).split())
-            current_chunk.append(text)
-            current_size += elem_size
-
-    if current_chunk:
-        chunks.append(" ".join(current_chunk))
-    
-    # Постобработка: удаление возможных дубликатов и пустых чанков
-    chunks = [chunk for chunk in chunks if chunk.strip() and len(chunk.split()) > 5]  # Отбрасываем слишком короткие чанки
-    return chunks
 
 class LegalConsult:
-    doc_path = 'data/raw/housing_code/JKRF.docx'
+    doc_path = 'data/raw/housing_code/garant/1.html'
 
     def __init__(self, api_key, role):
         self.api_key = api_key
-        elements = extract_structural_elements(self.doc_path)
-        chunks = hierarchical_chunking(elements)
-        # Здесь можно добавить дополнительную обработку чанков перед созданием эмбеддингов
-        self.clean_chunks = [clean_text(chunk) for chunk in chunks]
 
-        #Проверка
-        print('??????????????????????????????????????????????')
-        print(chunks[50])
-        print('??????????????????????????????????????????????')
-        print(chunks[51])
-        print('??????????????????????????????????????????????')
-        print(chunks[52])
+        chunks, metadatas = tqdm(load_and_chunk_html_documents(self.doc_path))
 
-        embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
-        self.vectorstore = FAISS.from_texts(chunks, embeddings)
+        # Инициализация эмбеддингов
+        embeddings = HuggingFaceEmbeddings(
+            model_name="sentence-transformers/all-MiniLM-L6-v2",
+            encode_kwargs={'normalize_embeddings': True}
+        )
+        
+        # Создание векторного хранилища
+        self.vectorstore = FAISS.from_texts(
+            texts=chunks,
+            embedding=embeddings,
+            metadatas=metadatas
+        )
+    
+        # Сохранение векторного хранилища для последующего использования
+        self.vectorstore.save_local("legal_docs_faiss_index")
+
+        # Загрузка при необходимости
+        # vectorstore = FAISS.load_local("legal_docs_faiss_index", embeddings)
 
         self.llm = ChatCompressa(
             base_url="https://compressa-api.mil-team.ru/v1",
@@ -141,3 +67,40 @@ class LegalConsult:
         self.messages.append(("assistant", ai_msg.content))
 
         return ai_msg.content
+
+
+# Пример использования
+if __name__ == "__main__":
+    doc_path = 'data/raw/housing_code/garant/1.html'
+    print('h'*50)
+    # Загрузка документа и создание векторного хранилища
+    chunks, metadatas = tqdm(load_and_chunk_html_documents(doc_path))
+
+    for i in range(4):
+        print(metadatas[i])
+        print(chunks[i])
+        print('='*50)
+
+
+    # Инициализация эмбеддингов
+    embeddings = HuggingFaceEmbeddings(
+        model_name="sentence-transformers/all-MiniLM-L6-v2",
+        encode_kwargs={'normalize_embeddings': True}
+    )
+    
+    
+    # Создание векторного хранилища
+    vectorstore = FAISS.from_texts(
+        texts=chunks,
+        embedding=embeddings,
+        metadatas=metadatas
+    )
+
+    # Пример поиска
+    query = "Перепланировка квартиры. Я хочу установить душевую кабинку вместо ванной, являюсь собственником квартиры. Могу ли я это сделать без каких-либо разрешений?"
+    docs = tqdm(vectorstore.similarity_search(query, k=2), desc='similarity_search in vectorestore')
+    
+    print(f"query: {query}")
+    for doc in docs:
+        print("Текст:", doc.page_content)
+    

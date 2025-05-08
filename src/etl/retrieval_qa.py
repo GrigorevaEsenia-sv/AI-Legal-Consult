@@ -1,7 +1,7 @@
-from langchain.document_loaders import TextLoader, CSVLoader
+from langchain_community.document_loaders import CSVLoader, TextLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_huggingface import HuggingFaceEmbeddings
-from langchain.vectorstores import FAISS
+from langchain_community.vectorstores import FAISS
 from langchain.chains import RetrievalQA
 from datetime import datetime
 # from data_loader import load_data
