@@ -1,13 +1,10 @@
 from bs4 import BeautifulSoup
-import re
-from typing import List, Dict, Tuple, Optional
 import os
-from langchain.schema import Document
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
 from tqdm import tqdm
-from langchain.schema import Document
-
+from datetime import datetime
+import uuid
 from bs4 import BeautifulSoup
 import re
 from langchain.text_splitter import RecursiveCharacterTextSplitter
@@ -94,10 +91,22 @@ if __name__ == "__main__":
     # Загрузка документа и создание векторного хранилища
     chunks, metadatas = tqdm(load_and_chunk_html_documents(doc_path))
 
-    for i in range(4):
-        print(metadatas[i])
-        print(chunks[i])
-        print('='*50)
+    # Создаем уникальное имя файла с timestamp
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    unique_id = str(uuid.uuid4())[:8]
+    result_dir = 'data/raw/housing_code/garant/chunks_examples'
+    result_filename = f"chunks_{timestamp}_{unique_id}.txt"
+    result_path = os.path.join(result_dir, result_filename)
+    
+    # Создаем директорию если нужно
+    os.makedirs(os.path.dirname(result_path), exist_ok=True)
+    
+    with open(result_path, 'w', encoding='utf-8') as f:  
+        for i in range(4):
+            print(metadatas[i])
+            print(chunks[i])
+            print('='*50) 
+            f.write(f"{metadatas[i]}\n{chunks[i]}\n{'='*50}")
 
 
     # Инициализация эмбеддингов
