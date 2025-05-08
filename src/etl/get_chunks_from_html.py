@@ -94,7 +94,7 @@ if __name__ == "__main__":
     # Создаем уникальное имя файла с timestamp
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     unique_id = str(uuid.uuid4())[:8]
-    result_dir = 'data/raw/housing_code/garant/chunks_examples'
+    result_dir = 'data/processed/chunks_examples_from_garant'
     result_filename = f"chunks_{timestamp}_{unique_id}.txt"
     result_path = os.path.join(result_dir, result_filename)
     
