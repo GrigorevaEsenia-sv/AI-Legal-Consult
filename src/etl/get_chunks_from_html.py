@@ -5,11 +5,26 @@ from langchain_community.vectorstores import FAISS
 from tqdm import tqdm
 from datetime import datetime
 import uuid
-from bs4 import BeautifulSoup
-import re
 from langchain.text_splitter import RecursiveCharacterTextSplitter
+import re
+import html
 
-def load_and_chunk_html_documents(file_path, chunk_overlap=50):
+def clean_text(text):
+    """
+    Очистка текста от HTML-сущностей и специальных пробелов с сохранением переносов строк.
+    """
+    if not text:
+        return text
+    
+    # Декодируем HTML-сущности
+    text = html.unescape(text)
+    
+    # Заменяем специальные пробелы на обычные, сохраняя переносы строк
+    text = re.sub(r'[\xa0\u200b\u202f]+', ' ', text)
+    
+    return text.lstrip('.;, ')
+
+def load_and_chunk_html_documents(file_path, chunk_size=1600, chunk_overlap=150):
     """
     Загружает HTML документ, извлекает текст, нарезает на чанки и создает векторное хранилище.
     
@@ -28,7 +43,7 @@ def load_and_chunk_html_documents(file_path, chunk_overlap=50):
     soup = BeautifulSoup(html_content, 'html.parser')
     
     # Удаление ненужных тегов (стили, скрипты)
-    for tag in soup(['style', 'script', 'meta', 'link']):
+    for tag in soup(['style', 'script', 'meta', 'link', 'noscript', 'iframe', 'svg']):
         tag.decompose()
     
     # Извлечение структурированного текста
@@ -36,60 +51,63 @@ def load_and_chunk_html_documents(file_path, chunk_overlap=50):
     current_section = ""
     
     # Обработка структуры документа (разделы, главы, статьи)
-    for element in soup.find_all(['h1', 'h2', 'h3', 'h4', 'p', 'div']):
+    for element in soup.find_all(['h1', 'h2', 'h3', 'h4', 'p', 'div', 'article', 'section']):
+        element_text = clean_text(element.get_text())
+        if not element_text:
+            continue
+            
         if element.name in ['h1', 'h2', 'h3', 'h4']:
             if current_section:
                 sections.append(current_section.strip())
                 current_section = ""
-            current_section += f"\n{element.get_text().upper()}\n"
+            current_section += f"\n{element_text.upper()}\n"
         else:
-            current_section += element.get_text() + " "
+            current_section += element_text + " "
     
     if current_section:
         sections.append(current_section.strip())
     
     # Настройка сплиттера для юридических текстов
     text_splitter = RecursiveCharacterTextSplitter(
+        chunk_size=chunk_size,
         chunk_overlap=chunk_overlap,
         length_function=len,
-        separators=['\n\n', '\n', ';', ' ', '']
+        separators=['\n\n', '\n', ';', '. ']
     )
     
     # Нарезка на чанки
     chunks = []
     metadatas = []
-    
+
+    metadata = dict()
+
+    print(f'len(sections) {len(sections)}')
     for section in sections:
         section_chunks = text_splitter.split_text(section)
         
         # Извлечение метаданных (раздел, глава, статья) из текста
+        print(f'len(section_chunks) {len(section_chunks)}')
         for chunk in section_chunks:
-            chunk = chunk.lstrip('.;, ')
-            # print('='*50)
-            # print(chunk)
-            # print('='*50)
-
-            metadata = {}
+            current_metadata = metadata.copy()
             lines = chunk.split('\n')
-            
             for line in lines:
+                line = clean_text(line)
+
                 if line.startswith('Раздел'):
-                    metadata['section'] = line.replace('Раздел', '').strip()
+                    current_metadata['section'] = line.strip()
                 elif line.startswith('Глава'):
-                    metadata['chapter'] = line.replace('Глава', '').strip()
+                    current_metadata['chapter'] = line.strip()
                 elif line.startswith('Статья'):
-                    metadata['article'] = line.strip()
-            
+                    current_metadata['article'] = line.strip()
+
             chunks.append(chunk)
             metadatas.append(metadata)
+            metadata = current_metadata
 
     return chunks, metadatas
 
 if __name__ == "__main__":
     doc_path = 'data/raw/housing_code/garant/1.html'
-    print('h'*50)
-    # Загрузка документа и создание векторного хранилища
-    chunks, metadatas = tqdm(load_and_chunk_html_documents(doc_path))
 
     # Создаем уникальное имя файла с timestamp
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -97,37 +115,19 @@ if __name__ == "__main__":
     result_dir = 'data/processed/chunks_examples_from_garant'
     result_filename = f"chunks_{timestamp}_{unique_id}.txt"
     result_path = os.path.join(result_dir, result_filename)
-    
-    # Создаем директорию если нужно
+
+    # Загрузка документа и создание векторного хранилища
+    chunks, metadatas = tqdm(load_and_chunk_html_documents(doc_path))
+
+
+    # # Создаем директорию если нужно
     os.makedirs(os.path.dirname(result_path), exist_ok=True)
     
     with open(result_path, 'w', encoding='utf-8') as f:  
-        for i in range(4):
-            print(metadatas[i])
-            print(chunks[i])
-            print('='*50) 
-            f.write(f"{metadatas[i]}\n{chunks[i]}\n{'='*50}")
+        for i in range(len(chunks)):
+            f.write('\nmetadatas\n')
+            f.write(str(metadatas[i]))
+            f.write('\n')
+            f.write(chunks[i])
 
-
-    # Инициализация эмбеддингов
-    embeddings = HuggingFaceEmbeddings(
-        model_name="sentence-transformers/all-MiniLM-L6-v2",
-        encode_kwargs={'normalize_embeddings': True}
-    )
-    
-    
-    # Создание векторного хранилища
-    vectorstore = FAISS.from_texts(
-        texts=chunks,
-        embedding=embeddings,
-        metadatas=metadatas
-    )
-
-    # Пример поиска
-    query = "Перепланировка квартиры. Я хочу установить душевую кабинку вместо ванной, являюсь собственником квартиры. Могу ли я это сделать без каких-либо разрешений?"
-    docs = tqdm(vectorstore.similarity_search(query, k=2), desc='similarity_search in vectorestore')
-    
-    print(f"query: {query}")
-    for doc in docs:
-        print("Текст:", doc.page_content)
     
