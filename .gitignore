@@ -3,3 +3,36 @@ venv/
 env/
 configs/
 __pycache__
+
+# Docker-specific files
+**/Dockerfile
+**/docker-compose.yml
+**/.dockerignore
+!**/Dockerfile.prod  # Исключение: если хотите отслеживать продакшен-версию
+!**/docker-compose.prod.yml  # Исключение: если нужна продакшен-версия
+
+# Локальные данные и кеши
+**/docker-data/
+**/.docker/
+**/tmp/
+
+# Временные файлы сборки
+**/build/
+**/dist/
+
+# Переменные окружения и секреты
+.env
+*.env
+**/secrets/
+**/.env.*
+!**.env.example  # Исключение: шаблон env-файла можно хранить
+
+# Логи и дампы
+**/*.log
+**/dump.sql
+**/backup/
+
+# Файлы редакторов и IDE
+.idea/
+.vscode/
+*.swp

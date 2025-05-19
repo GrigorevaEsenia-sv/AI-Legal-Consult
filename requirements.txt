@@ -16,3 +16,8 @@ python-docx
 requests
 pyyaml
 python-dotenv
+accelerate
+bert_score
+datasets
+trl
+peft
