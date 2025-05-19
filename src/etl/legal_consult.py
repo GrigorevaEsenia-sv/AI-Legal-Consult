@@ -25,18 +25,18 @@ class LegalConsult:
             encode_kwargs={'normalize_embeddings': True}
         )
         
-        # Создание векторного хранилища
-        self.vectorstore = FAISS.from_texts(
-            texts=chunks,
-            embedding=embeddings,
-            metadatas=metadatas
-        )
+        # # Создание векторного хранилища
+        # self.vectorstore = FAISS.from_texts(
+        #     texts=chunks,
+        #     embedding=embeddings,
+        #     metadatas=metadatas
+        # )
     
         # Сохранение векторного хранилища для последующего использования
-        self.vectorstore.save_local("legal_docs_faiss_index")
+        # self.vectorstore.save_local("legal_docs_faiss_index")
 
         # Загрузка при необходимости
-        # vectorstore = FAISS.load_local("legal_docs_faiss_index", embeddings)
+        self.vectorstore = FAISS.load_local("legal_docs_faiss_index", embeddings)
 
         self.llm = ChatCompressa(
             base_url="https://compressa-api.mil-team.ru/v1",
