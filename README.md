@@ -2,6 +2,9 @@
 
 Чат-бот на основе технологии Retrieval-Augmented Generation (RAG) для предоставления первичных юридических консультаций гражданам Российской Федерации. Решение строится на платформе Compressa AI Cloud с поэтапным внедрением функциональности и расширением базы знаний
 
+
+[Ноутбук](https://colab.research.google.com/drive/1VWZnHHysgYcVBSfWPxDEWHkYFULWNqEu?usp=sharing) для обучения Llama-3.2-Conversations + LoRA на корпусе юридических данных [RusLawOD](https://huggingface.co/datasets/irlspbru/RusLawOD)
+
 ## Содержание
 - [Технологии](#технологии)
 - [Использование](#использование)
